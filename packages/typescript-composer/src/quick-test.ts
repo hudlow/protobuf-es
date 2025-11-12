@@ -73,7 +73,7 @@ const file = code`
   ${listDirName}();
 `;
 
-console.log(file.toString());
+// console.log(file.toString());
 
 const funcDef = func(
   "wrap",
@@ -89,10 +89,19 @@ const funcDef = func(
       }
       lines[lines.length - 1] += " " + word;
     }
-    return lines.join("\n");`,
+    return lines.join("\n");
+  `,
 );
 
-console.log(funcDef.toString());
+// console.log(funcDef.toString());
+
+const myFile = code`
+  ${funcDef}
+
+  ${funcDef}();
+`;
+
+console.log(myFile.toString());
 
 class TypeStripper extends Transformer {
   mutate(original: UnknownNode) {
@@ -108,4 +117,4 @@ class TypeStripper extends Transformer {
 
 const transformer = new TypeStripper();
 
-console.log(funcDef.transform(transformer).toString());
+// console.log(funcDef.transform(transformer).toString());

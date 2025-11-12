@@ -70,6 +70,7 @@ type ObjectIfThenInput = {
   if: ExprInput;
   then: BlockInput;
   else?: BlockInput;
+  kind?: never;
 };
 
 export type IfThenInput = IfThenNode | ObjectIfThenInput;
