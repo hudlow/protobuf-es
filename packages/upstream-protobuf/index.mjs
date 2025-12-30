@@ -56,6 +56,7 @@ export class UpstreamProtobuf {
     "src/google/protobuf/test_messages_*.proto",
     "src/google/protobuf/*unittest*.proto",
     "editions/golden/test_messages_proto3_editions.proto",
+    "!src/google/protobuf/unittest_custom_features.proto",
     "!src/google/protobuf/unittest_lite_edition_2024.proto",
     "!src/google/protobuf/unittest_string_type.proto",
     "!src/google/protobuf/map_proto3_unittest.proto",
@@ -90,16 +91,15 @@ export class UpstreamProtobuf {
 
   constructor() {
     // find upstream version by shelling out to protoc
-    const match = execFileSync("protoc", ["--version"], {
+    const rawVersion = execFileSync("protoc", ["--version"], {
       shell: false,
       stdio: "pipe",
       encoding: "utf8",
-    })
-      .trim()
-      .match(/^libprotoc (\d\d\.\d)$/);
+    }).trim();
+    const match = rawVersion.match(/^libprotoc (\d\d\.\d(?:-.+)?)$/);
     if (!match) {
       throw new Error(
-        `Unable to determine upstream version from protoc --version output "${match[1]}"`,
+        `Unable to determine upstream version from protoc --version output "${rawVersion}"`,
       );
     }
     this.#version = match[1];

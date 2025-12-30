@@ -34,7 +34,7 @@ To learn more about Protobuf's capabilities, read the [official language guide][
 
 ## What is Protobuf-ES?
 
-Protobuf-ES is a complete implementation of Protocol Buffers in TypeScript, suitable for web browsers and Node.js,
+Protobuf-ES is a complete implementation of Protocol Buffers in TypeScript, suitable for web browsers, Node.js, and Deno,
 created by [Buf]. It's the only fully-compliant JavaScript Protobuf library that passes the Protobuf conformance
 tests—[read more on our blog][blog-post].
 
@@ -892,6 +892,20 @@ let date: Date = timestampDate(ts);
 let ms: number = timestampMs(ts);
 ```
 
+### google.protobuf.Duration
+
+A `Duration` represents a fixed span of time with nanosecond precision. For convenience, we provide functions for conversion to milliseconds:
+
+```typescript
+import { type Duration, durationFromMs, durationMs } from "@bufbuild/protobuf/wkt";
+
+// Create a Duration from milliseconds.
+let duration: Duration = durationFromMs(1012);
+
+// Convert a Duration to milliseconds.
+let ms: number = timestampMs(duration);
+```
+
 ### google.protobuf.Any
 
 `Any` stores an arbitrary message as binary data. For convenience, we provide function to pack and unpack messages:
@@ -1157,7 +1171,7 @@ Options for `fromBinary`:
 
 - `readUnknownFields?: boolean`<br/>
   Controls whether to retain [unknown fields](#unknown-fields) during parsing. The default behavior is to retain
-  unknown fields and include them in the serialized output.
+  unknown fields and include them in the deserialized output.
 
 ### JSON serialization options
 

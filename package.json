@@ -12,7 +12,8 @@
     "packages/bundle-size",
     "packages/protobuf-example",
     "packages/upstream-protobuf",
-    "packages/typescript-compat/*"
+    "packages/typescript-compat/*",
+    "deno/conformance"
   ],
   "scripts": {
     "clean": "git clean -Xdf",
@@ -40,8 +41,8 @@
     "@arethetypeswrong/cli": "^0.18.2",
     "@biomejs/biome": "^1.9.4",
     "@bufbuild/license-header": "^0.0.4",
-    "@types/node": "^24.3.0",
-    "turbo": "^2.5.6",
+    "@types/node": "^24.10.1",
+    "turbo": "^2.6.1",
     "typescript": "^5.9.2"
   },
   "//": "avoid hoisting of @typescript/vfs, see packages/protoplugin/src/transpile.ts",
