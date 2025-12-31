@@ -1,29 +1,114 @@
-import { type NamedNode, Node, type UnknownNodeInput } from "../plumbing.js";
-import type { Transformer } from "../plumbing.js";
-import { type Type, isType, isTypeInput, type } from "../type/type.js";
-import type { TypeInput } from "../type/type.js";
-import type { ExprNode } from "./expr.js";
-import {
-  type Expr,
-  type ExprInput,
-  expr,
-  exprProvider,
-  exprProxy,
-  isExprInput,
-} from "./expr.js";
-import { type Id, id, isIdInput } from "./id.js";
-import type { IdInput } from "./id.js";
+import { expr, Expr, ExprInput, exprProxy, isExprInput } from "../expr/expr.js";
+import { ident, Ident, IdentInput, isIdentInput } from "../expr/ident.js";
+import { isObjectWith } from "../util.js";
+import type { Transformer } from "../transformer.js";
+import { isTypeInput, type, TypeInput, type Type } from "../type/type.js";
 
-export class VarDeclNode implements NamedNode<"varDecl"> {
-  static readonly kind = "varDecl";
-  readonly kind = "varDecl";
-  readonly family = Node.Family.EXPR;
+const VAR_DECL_SYMBOL = Symbol("@bufbuild/typescript-composer/stmt/block");
 
-  private constructor(
-    readonly id: Id,
-    readonly type?: Type,
-    readonly value?: Expr,
-  ) {}
+export interface VarDecl {
+  [VAR_DECL_SYMBOL]: true;
+  readonly kind: "varDecl";
+  readonly family: "stmt";
+  readonly id: Ident;
+  readonly type?: Type;
+  readonly value?: Expr;
+  toString(): string;
+  transform(t: Transformer): Expr;
+}
+
+export function isVarDecl(v: unknown): v is VarDecl {
+  return isObjectWith(v, VAR_DECL_SYMBOL);
+}
+
+export function varDecl(id: IdentInput): VarDecl;
+export function varDecl(id: IdentInput, value: ExprInput): VarDecl;
+export function varDecl(id: IdentInput, type: TypeInput): VarDecl;
+export function varDecl(id: IdentInput, type: TypeInput, value: ExprInput): VarDecl;
+export function varDecl(...tuple: VarDeclInputTuple): VarDecl
+export function varDecl(input: Ident | VarDeclInputTuple | VarDecl): VarDecl
+export function varDecl(...t: [VarDeclInputTuple | VarDecl] | VarDeclInputTuple): VarDecl {
+  if (isVarDecl(t[0])) return t[0];
+  if (isVarDeclInputTuple(t[0])) {
+    return varDecl(...t[0]);
+  }
+
+  if (isIdentTuple(t)) return new VarDeclNode(ident(t[0]));
+  if (isIdentTypeTuple(t)) return new VarDeclNode(ident(t[0]), type(t[1]));
+  if (isIdentValueTuple(t)) return new VarDeclNode(ident(t[0]), undefined, expr(t[1]));
+
+  return new VarDeclNode(ident(t[0]), type(t[1]), expr(t[2]));
+}
+
+export type VarDeclInput = VarDecl | VarDeclInputTuple;
+
+type VarDeclInputTuple =
+  | IdTupleVarDeclInput
+  | IdValueTupleVarDeclInput
+  | IdTypeTupleVarDeclInput
+  | IdTypeValueTupleVarDeclInput;
+
+type IdTupleVarDeclInput =
+  | readonly [IdentInput]
+  | readonly[IdentInput, undefined]
+  | readonly [IdentInput, undefined, undefined];
+type IdValueTupleVarDeclInput = readonly [IdentInput, ExprInput];
+type IdTypeTupleVarDeclInput = readonly [IdentInput, Type];
+type IdTypeValueTupleVarDeclInput = readonly [IdentInput, TypeInput, ExprInput];
+
+export function isVarDeclInput(v: unknown): boolean {
+  return (isVarDecl(v) || isVarDeclInputTuple(v));
+}
+function isVarDeclInputTuple(v: unknown): v is VarDeclInputTuple {
+  return (
+    Array.isArray(v) && (
+      isIdentTuple(v) ||
+      isIdentTypeTuple(v) ||
+      isIdentValueTuple(v) ||
+      isIdentTypeValueTuple(v)
+    )
+  );
+}
+
+function isIdentTuple(t: readonly unknown[]): t is IdTupleVarDeclInput {
+  return (t.length === 1 && isIdentInput(t[0]))
+}
+
+function isIdentTypeTuple(t: readonly unknown[]): t is IdTypeTupleVarDeclInput {
+  return (t.length === 2 && isIdentInput(t[0]) && isTypeInput(t[1]));
+}
+
+function isIdentValueTuple(t: readonly unknown[]): t is IdValueTupleVarDeclInput {
+  return (t.length === 2 && isIdentInput(t[0]) && isExprInput(t[1]));
+}
+
+function isIdentTypeValueTuple(t: readonly unknown[]): t is IdValueTupleVarDeclInput {
+  return (t.length === 3 && isIdentInput(t[0]) && isTypeInput(t[1]) && isExprInput(t[2]));
+}
+
+class VarDeclNode implements VarDecl {
+  readonly [VAR_DECL_SYMBOL]: true = true;
+  readonly #kind = "varDecl" as const;
+  readonly #family = "stmt" as const;
+  readonly #id: Ident;
+  readonly #type?: Type;
+  readonly #value?: Expr;
+
+  constructor(
+    id: Ident,
+    type?: Type,
+    value?: Expr,
+  ) {
+    this.#id = id;
+    this.#type = type;
+    this.#value = value;
+  }
+
+  get kind() { return this.#kind; }
+  get family() { return this.#family; }
+  get id() { return this.#id; }
+  get type() { return this.#type; }
+  get value() { return this.#value; }
 
   toString() {
     let declaration = this.id.toString();
@@ -40,108 +125,11 @@ export class VarDeclNode implements NamedNode<"varDecl"> {
         this,
         () =>
           new VarDeclNode(
-            this.id.transform(t),
-            this.type?.transform(t),
-            this.value?.transform(t),
+            this.#id.transform(t),
+            this.#type?.transform(t),
+            this.#value?.transform(t),
           ),
       ),
     );
   }
-
-  static marshal(name: IdInput): VarDecl;
-  static marshal(name: IdInput, value: ExprInput | undefined): VarDecl;
-  static marshal(name: IdInput, type: Type): VarDecl;
-  static marshal(name: IdInput, type: Type, value: ExprInput): VarDecl;
-  static marshal(...input: VarDeclInput): VarDecl;
-  static marshal(varDecl: VarDecl): VarDecl;
-  static marshal(...input: VarDeclInput | [VarDecl]): VarDecl {
-    if (input.length === 1) {
-      if (VarDeclNode.is(input[0])) return input[0];
-      return exprProxy(new VarDeclNode(id(input[0])));
-    }
-    if (VarDeclNode.#isIdTupleInput(input))
-      return exprProxy(new VarDeclNode(id(input[0])));
-    if (VarDeclNode.#isIdTypeTupleInput(input))
-      return exprProxy(new VarDeclNode(id(input[0]), type(input[1])));
-    if (VarDeclNode.#isIdValueTupleInput(input))
-      return exprProxy(
-        new VarDeclNode(id(input[0]), undefined, expr(input[1])),
-      );
-
-    return exprProxy(
-      new VarDeclNode(id(input[0]), type(input[1]), expr(input[2])),
-    );
-  }
-
-  static is(input: UnknownNodeInput): input is VarDecl {
-    return input instanceof VarDeclNode;
-  }
-
-  static isInput(input: UnknownNodeInput): input is VarDeclInput {
-    return (
-      VarDeclNode.#isIdTupleInput(input) ||
-      VarDeclNode.#isIdTypeTupleInput(input) ||
-      VarDeclNode.#isIdValueTupleInput(input) ||
-      VarDeclNode.#isIdTypeValueTupleInput(input)
-    );
-  }
-
-  static #isIdTupleInput(
-    input: UnknownNodeInput,
-  ): input is IdTupleVarDeclInput {
-    if (!Array.isArray(input)) return false;
-    const filtered = input.filter((i) => i !== undefined);
-    return filtered.length === 1 && isIdInput(input[0]);
-  }
-
-  static #isIdTypeTupleInput(
-    input: UnknownNodeInput,
-  ): input is IdTypeTupleVarDeclInput {
-    return (
-      Array.isArray(input) &&
-      input.length === 2 &&
-      isIdInput(input[0]) &&
-      isType(input[1])
-    );
-  }
-
-  static #isIdValueTupleInput(
-    input: UnknownNodeInput,
-  ): input is IdValueTupleVarDeclInput {
-    if (!Array.isArray(input)) return false;
-    const filtered = input.filter((i) => i !== undefined);
-    return (
-      filtered.length === 2 && isIdInput(input[0]) && isExprInput(input[1])
-    );
-  }
-
-  static #isIdTypeValueTupleInput(
-    input: UnknownNodeInput,
-  ): input is IdTypeValueTupleVarDeclInput {
-    return (
-      Array.isArray(input) &&
-      input.length === 3 &&
-      isIdInput(input[0]) &&
-      isTypeInput(input[1]) &&
-      isExprInput(input[2])
-    );
-  }
 }
-
-type IdTupleVarDeclInput =
-  | [IdInput]
-  | [IdInput, undefined]
-  | [IdInput, undefined, undefined];
-type IdValueTupleVarDeclInput = [IdInput, ExprInput];
-type IdTypeTupleVarDeclInput = [IdInput, Type];
-type IdTypeValueTupleVarDeclInput = [IdInput, TypeInput, ExprInput];
-
-export type VarDeclInput =
-  | IdTupleVarDeclInput
-  | IdValueTupleVarDeclInput
-  | IdTypeTupleVarDeclInput
-  | IdTypeValueTupleVarDeclInput;
-
-export type VarDecl = ExprNode<VarDeclNode>;
-export const VarDecl = exprProvider(VarDeclNode);
-export const { varDecl, isVarDecl, isVarDeclInput } = VarDecl;

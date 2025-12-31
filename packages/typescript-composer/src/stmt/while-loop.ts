@@ -1,7 +1,7 @@
 import { type Expr, type ExprInput, expr, isExprInput } from "../expr/expr.js";
 import {
   Node,
-  type UnknownNodeInput,
+  
   hasNodeInputProperty,
   provider,
 } from "../plumbing.js";
@@ -39,11 +39,11 @@ export class WhileLoopNode implements Node<"whileLoop", Node.Family.STMT> {
     return new WhileLoopNode(expr(input[0]), blockish(input[1]));
   }
 
-  static is(input: UnknownNodeInput): input is WhileLoopNode {
+  static is(input: unknown): input is WhileLoopNode {
     return input instanceof WhileLoopNode;
   }
 
-  static isInput(input: UnknownNodeInput): input is WhileLoopInput {
+  static isInput(input: unknown): input is WhileLoopInput {
     return (
       hasNodeInputProperty(input, "while") &&
       isExprInput(input.while) &&

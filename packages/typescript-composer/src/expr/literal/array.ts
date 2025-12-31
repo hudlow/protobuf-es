@@ -1,53 +1,64 @@
-import type { ExprNode } from "../../expr/expr.js";
 import {
   type Expr,
   expr,
-  exprProvider,
   exprProxy,
   isExpr,
 } from "../../expr/expr.js";
-import { Node, type UnknownNodeInput } from "../../plumbing.js";
-import type { Transformer } from "../../plumbing.js";
+import { Transformer } from "../../transformer.js";
+import { isObjectWith} from "../../util.js";
 import { type RawLiteralInput, isLiteralInput, literal } from "./literal.js";
 
-export class ArrayLiteralNode implements Node<"arrayLiteral"> {
-  static readonly kind = "arrayLiteral";
-  readonly kind = "arrayLiteral";
-  readonly family = Node.Family.EXPR;
+const ARRAY_LITERAL_SYMBOL = Symbol("@bufbuild/typescript-composer/expr/literal/array");
 
-  private constructor(readonly values: Expr[]) {}
+export interface ArrayLiteral {
+  [ARRAY_LITERAL_SYMBOL]: true;
+  readonly kind: "arrayLiteral";
+  readonly family: "expr";
+  readonly values: Expr[];
+  toString(): string;
+  transform(t: Transformer): Expr;
+}
+
+export function isArrayLiteral(v: unknown): v is ArrayLiteral {
+  return isObjectWith(v, ARRAY_LITERAL_SYMBOL);
+}
+
+export function array(...input: ArrayLiteralInput): ArrayLiteral {
+  const i = input.map((v) => (isLiteralInput(v) ? literal(v) : expr(v)));
+
+  return exprProxy(new ArrayLiteralNode(i));
+}
+
+export type ArrayLiteralInput = (Expr | RawLiteralInput)[];
+
+export function isArrayLiteralInput(input: unknown): input is ArrayLiteralInput {
+  return (
+    Array.isArray(input) && input.every((i) => isExpr(i) || isLiteralInput(i))
+  );
+}
+
+class ArrayLiteralNode implements ArrayLiteral {
+  readonly [ARRAY_LITERAL_SYMBOL] = true as const
+  readonly #kind = "arrayLiteral" as const;
+  readonly #family = "expr" as const;
+  readonly #values: Expr[];
+
+  constructor(values: Expr[]) {
+    this.#values = values;
+  }
+
+  get kind() { return this.#kind; }
+  get family() { return this.#family; }
+  get values() { return this.#values; }
 
   toString() {
-    return `[${this.values.join(", ")}]`;
+    return `[${this.#values.join(", ")}]`;
   }
 
   transform(t: Transformer): ArrayLiteral {
     return t.replace(exprProxy(this), () =>
-      ArrayLiteralNode.marshal(...this.values.map((v) => v.transform(t))),
-    );
-  }
-
-  static marshal(...input: ArrayLiteralInput): ArrayLiteral {
-    const i = input.map((v) => (isLiteralInput(v) ? literal(v) : expr(v)));
-
-    return exprProxy(new ArrayLiteralNode(i));
-  }
-
-  static is(input: UnknownNodeInput): input is ArrayLiteral {
-    return input instanceof ArrayLiteralNode;
-  }
-
-  static isInput(input: UnknownNodeInput): input is ArrayLiteralInput {
-    return (
-      Array.isArray(input) && input.every((i) => isExpr(i) || isLiteralInput(i))
+      array(...this.#values.map((v) => v.transform(t))),
     );
   }
 }
 
-export type foo = ExprNode<ArrayLiteralNode>;
-
-export type ArrayLiteralInput = (Expr | RawLiteralInput)[];
-export type ArrayLiteral = ExprNode<ArrayLiteralNode>;
-export const ArrayLiteral = exprProvider(ArrayLiteralNode);
-export const { arrayLiteral, isArrayLiteral, isArrayLiteralInput } =
-  ArrayLiteral;

@@ -1,117 +1,138 @@
-import { Node, type UnknownNodeInput } from "../plumbing.js";
-import type { Transformer } from "../plumbing.js";
+import { Transformer } from "../transformer.js";
+import { isObjectWith } from "../util.js";
 import {
   type Expr,
   type ExprInput,
-  type ExprNode,
   expr,
-  exprProvider,
   exprProxy,
   isExprInput,
 } from "./expr.js";
 
-class BinaryNode implements Node<"binary"> {
-  static readonly kind = "binary";
-  readonly family = Node.Family.EXPR;
-  readonly kind = "binary";
+const BINARY_SYMBOL = Symbol("@bufbuild/typescript-composer/expr/binary");
 
-  static readonly operators = [
-    "=", //   assignment
+export interface Binary {
+  [BINARY_SYMBOL]: true;
+  readonly kind: "binary";
+  readonly family: "expr";
+  readonly left: Expr;
+  readonly op: BinaryOperator;
+  readonly right: Expr;
+  toString(): string;
+  transform(t: Transformer): Expr;
+}
 
-    "??", //  nullish coalescing
-    "??=", // nullish coalescing + assignment
+export function isBinary(v: unknown): v is Binary {
+  return isObjectWith(v, BINARY_SYMBOL);
+}
 
-    ">", //   greater than
-    ">=", //  greater than or equal
-    "<", //   less than
-    "<=", //  less than or equal
+const OPERATORS =  [
+  "=", //   assignment
 
-    "==", //  equality
-    "!=", //  inequality
+  "??", //  nullish coalescing
+  "??=", // nullish coalescing + assignment
 
-    "===", // strict equality
-    "!==", // strict inequality
+  ">", //   greater than
+  ">=", //  greater than or equal
+  "<", //   less than
+  "<=", //  less than or equal
 
-    "+", //   addition
-    "/", //   division
-    "**", //  exponentiation
-    "*", //   multiplication
-    "%", //   remainder
-    "-", //   subtraction
+  "==", //  equality
+  "!=", //  inequality
 
-    "/=", //  division           + assignment
-    "**=", // exponentiation    + assignment
-    "*=", //  multiplication     + assignment
-    "%=", //  remainder          + assignment
-    "-=", //  subtraction        + assignment
-    "+=", //  addition           + assignment
+  "===", // strict equality
+  "!==", // strict inequality
 
-    "&&", //  logical and
-    "||", //  logical or
+  "+", //   addition
+  "/", //   division
+  "**", //  exponentiation
+  "*", //   multiplication
+  "%", //   remainder
+  "-", //   subtraction
 
-    "&&=", // logical and        + assignment
-    "||=", // logical or         + assignment
+  "/=", //  division           + assignment
+  "**=", // exponentiation    + assignment
+  "*=", //  multiplication     + assignment
+  "%=", //  remainder          + assignment
+  "-=", //  subtraction        + assignment
+  "+=", //  addition           + assignment
 
-    "<<", //  left shift
-    ">>", //  right shift
+  "&&", //  logical and
+  "||", //  logical or
 
-    "<<=", // left shift         + assignment
-    ">>=", // right shift        + assignment
+  "&&=", // logical and        + assignment
+  "||=", // logical or         + assignment
 
-    "&", //   bitwise and
-    "|", //   bitwise or
-    "^", //   bitwise xor
+  "<<", //  left shift
+  ">>", //  right shift
 
-    "&=", //  bitwise and        + assignment
-    "|=", //  bitwise or         + assignment
-    "^=", //  bitwise xor        + assignment
+  "<<=", // left shift         + assignment
+  ">>=", // right shift        + assignment
 
-    "in",
-    "instanceof",
-  ] as const;
+  "&", //   bitwise and
+  "|", //   bitwise or
+  "^", //   bitwise xor
 
-  private constructor(
-    readonly left: Expr,
-    readonly op: BinaryOperator,
-    readonly right: Expr,
-  ) {}
+  "&=", //  bitwise and        + assignment
+  "|=", //  bitwise or         + assignment
+  "^=", //  bitwise xor        + assignment
+
+  "in",
+  "instanceof",
+] as const;
+
+type BinaryOperator = (typeof OPERATORS)[number];
+
+export function binary(
+  leftOperand: ExprInput,
+  operator: BinaryOperator,
+  rightOperand: ExprInput,
+): Binary {
+  return exprProxy(
+    new BinaryNode(expr(leftOperand), operator, expr(rightOperand)),
+  );
+}
+
+export function isBinaryInput(input: unknown): input is BinaryInput {
+  return (
+    Array.isArray(input) &&
+    input.length === 3 &&
+    isExprInput(input[0]) && // left
+    OPERATORS.includes(input[1]) && // op
+    isExprInput(input[2]) // right
+  );
+}
+
+export type BinaryInput = Parameters<typeof binary>;
+
+class BinaryNode implements Binary {
+  [BINARY_SYMBOL] = true as const;
+  readonly #family = "expr" as const;
+  readonly #kind = "binary" as const;
+  readonly #left: Expr;
+  readonly #op: BinaryOperator;
+  readonly #right: Expr;
+
+  constructor(
+    left: Expr,
+    op: BinaryOperator,
+    right: Expr,
+  ) {
+    this.#left = left;
+    this.#op = op;
+    this.#right = right;
+  }
+
+  get kind() { return this.#kind; }
+  get family() { return this.#family; }
+  get left() { return this.#left; }
+  get op() { return this.#op; }
+  get right() { return this.#right; }
 
   toString() {
-    return `${this.left} ${this.op} ${this.right}`;
+    return `${this.#left} ${this.#op} ${this.#right}`;
   }
 
   transform(_: Transformer): Binary {
     return exprProxy(this);
   }
-
-  static marshal(
-    leftOperand: ExprInput,
-    operator: BinaryOperator,
-    rightOperand: ExprInput,
-  ): Binary {
-    return exprProxy(
-      new BinaryNode(expr(leftOperand), operator, expr(rightOperand)),
-    );
-  }
-
-  static is(input: UnknownNodeInput): input is Binary {
-    return input instanceof BinaryNode;
-  }
-
-  static isInput(input: UnknownNodeInput): input is BinaryInput {
-    return (
-      Array.isArray(input) &&
-      input.length === 3 &&
-      isExprInput(input[0]) && // left
-      BinaryNode.operators.includes(input[1]) && // op
-      isExprInput(input[2]) // right
-    );
-  }
 }
-
-type BinaryOperator = (typeof BinaryNode.operators)[number];
-
-export type BinaryInput = Parameters<typeof BinaryNode.marshal>;
-export type Binary = ExprNode<BinaryNode>;
-export const Binary = exprProvider(BinaryNode);
-export const { binary, isBinary, isBinaryInput } = Binary;

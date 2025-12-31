@@ -1,9 +1,8 @@
-import type { UnknownNodeInput } from "../../plumbing.js";
-import { ArrayLiteral, type ArrayLiteralInput } from "./array.js";
-import { BigIntLiteral } from "./bigint.js";
-import { BooleanLiteral } from "./boolean.js";
-import { NumberLiteral } from "./number.js";
-import { StringLiteral } from "./string.js";
+import { array, type ArrayLiteral, isArrayLiteralInput, type ArrayLiteralInput, isArrayLiteral } from "./array.js";
+import { bigint, isBigIntLiteralInput, isBigIntLiteral, type BigIntLiteral } from "./bigint.js";
+import { boolean, type BooleanLiteral, isBooleanLiteralInput, isBooleanLiteral } from "./boolean.js";
+import { isNumberLiteral, isNumberLiteralInput, number, type NumberLiteral } from "./number.js";
+import { string, isStringLiteral, type StringLiteral, isStringLiteralInput } from "./string.js";
 
 export type Literal =
   | ArrayLiteral
@@ -14,35 +13,35 @@ export type Literal =
 
 export function literal(input: LiteralInput): Literal {
   if (isLiteral(input)) return input;
-  if (ArrayLiteral.isArrayLiteralInput(input))
-    return ArrayLiteral.arrayLiteral(...input);
-  if (BooleanLiteral.isBooleanLiteralInput(input))
-    return BooleanLiteral.booleanLiteral(input);
-  if (BigIntLiteral.isBigIntLiteralInput(input))
-    return BigIntLiteral.bigIntLiteral(input);
-  if (NumberLiteral.isNumberLiteralInput(input))
-    return NumberLiteral.numberLiteral(input);
-  return StringLiteral.stringLiteral(input);
+  if (isArrayLiteralInput(input))
+    return array(...input);
+  if (isBooleanLiteralInput(input))
+    return boolean(input);
+  if (isBigIntLiteralInput(input))
+    return bigint(input);
+  if (isNumberLiteralInput(input))
+    return number(input);
+  return string(input);
 }
 
-export function isLiteral(input: UnknownNodeInput): input is Literal {
+export function isLiteral(input: unknown): input is Literal {
   return (
-    ArrayLiteral.isArrayLiteral(input) ||
-    BooleanLiteral.isBooleanLiteral(input) ||
-    BigIntLiteral.isBigIntLiteral(input) ||
-    NumberLiteral.isNumberLiteral(input) ||
-    StringLiteral.isStringLiteral(input)
+    isArrayLiteral(input) ||
+    isBooleanLiteral(input) ||
+    isBigIntLiteral(input) ||
+    isNumberLiteral(input) ||
+    isStringLiteral(input)
   );
 }
 
-export function isLiteralInput(input: UnknownNodeInput): input is LiteralInput {
+export function isLiteralInput(input: unknown): input is LiteralInput {
   return (
     isLiteral(input) ||
-    ArrayLiteral.isArrayLiteralInput(input) ||
-    BooleanLiteral.isBooleanLiteralInput(input) ||
-    BigIntLiteral.isBigIntLiteralInput(input) ||
-    NumberLiteral.isNumberLiteralInput(input) ||
-    StringLiteral.isStringLiteralInput(input)
+    isArrayLiteralInput(input) ||
+    isBooleanLiteralInput(input) ||
+    isBigIntLiteralInput(input) ||
+    isNumberLiteralInput(input) ||
+    isStringLiteralInput(input)
   );
 }
 

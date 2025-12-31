@@ -1,17 +1,50 @@
 import { type Expr, type ExprInput, expr, isExprInput } from "../expr/expr.js";
+import { Node } from "../node.js";
 import {
-  Node,
+    isObjectWith,
   type Transformer,
-  type UnknownNodeInput,
-  provider,
 } from "../plumbing.js";
 
-class ExprStmtNode implements Node<"exprStmt", Node.Family.STMT> {
-  static readonly kind = "exprStmt";
-  readonly kind = "exprStmt";
-  readonly family = Node.Family.STMT;
+const VAR_EXPR_STMT_SYMBOL = Symbol("@bufbuild/typescript-composer/stmt/expr-stmt");
 
-  private constructor(readonly expr: Expr) {}
+export interface ExprStmt {
+  [VAR_EXPR_STMT_SYMBOL]: true;
+  readonly kind: "exprStmt";
+  readonly family: "stmt";
+  readonly expr: Expr;
+  toString(): string;
+  transform(t: Transformer): Node;
+}
+
+export function isExprStmt(v: unknown): v is ExprStmt {
+  return isObjectWith(v, VAR_EXPR_STMT_SYMBOL);
+}
+
+export function exprStmt(input: ExprStmtInput): ExprStmt {
+  if (isExprStmt(input)) return input;
+
+  return new ExprStmtNode(expr(input));
+}
+
+export type ExprStmtInput = ExprStmt | ExprInput;
+
+export function isExprStmtInput(v: unknown): v is ExprStmtInput {
+  return (isExprStmt(v) || isExprInput(v));
+}
+
+class ExprStmtNode implements ExprStmt {
+  readonly [VAR_EXPR_STMT_SYMBOL] = true as const;
+  readonly #kind = "exprStmt" as const;
+  readonly #family = "stmt" as const;
+  readonly #expr: Expr;
+
+  constructor(expr: Expr) {
+    this.#expr = expr;
+  }
+
+  get kind() { return this.#kind; }
+  get family() { return this.#family; }
+  get expr() { return this.#expr; }
 
   toString() {
     return `${this.expr};`;
@@ -20,23 +53,4 @@ class ExprStmtNode implements Node<"exprStmt", Node.Family.STMT> {
   transform(t: Transformer) {
     return t.replace(this, () => new ExprStmtNode(this.expr.transform(t)));
   }
-
-  static marshal(input: ExprStmtInput): ExprStmt {
-    if (ExprStmtNode.is(input)) return input;
-    if (isExprInput(input)) return new ExprStmtNode(expr(input));
-    return new ExprStmtNode(input);
-  }
-
-  static is(input: UnknownNodeInput): input is ExprStmt {
-    return input instanceof ExprStmtNode;
-  }
-
-  static isInput(input: UnknownNodeInput): input is ExprStmtInput {
-    return ExprStmtNode.is(input) || isExprInput(input);
-  }
 }
-
-export type ExprStmtInput = ExprStmtNode | ExprInput;
-export type ExprStmt = ExprStmtNode;
-export const ExprStmt = provider(ExprStmtNode);
-export const { exprStmt, isExprStmt, isExprStmtInput } = ExprStmt;

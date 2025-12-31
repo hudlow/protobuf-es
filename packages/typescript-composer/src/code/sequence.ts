@@ -1,25 +1,72 @@
-import { Node, type UnknownNodeInput, provider } from "../plumbing.js";
-import type { Transformer } from "../plumbing.js";
+import { Node } from "../node.js";
+import type { Transformer } from "../transformer.js";
+import { isObjectWith } from "../util.js";
 
-export class CodeSequenceNode
-  implements Node<"codeSequence", Node.Family.CODE>
-{
-  static readonly kind = "codeSequence";
-  readonly kind = "codeSequence";
-  readonly family = Node.Family.CODE;
+const CODE_SEQUENCE_SYMBOL = Symbol("@bufbuild/typescript-composer/code/sequence");
 
-  private constructor(readonly parts: (string | Node<string, Node.Family>)[]) {}
+export interface CodeSequence {
+  [CODE_SEQUENCE_SYMBOL]: true;
+  readonly kind: "codeSequence";
+  readonly family: "code";
+  readonly segments: CodeSegment[];
+  toString(): string;
+  transform(t: Transformer): CodeSequence;
+  with(...input: CodeSequenceInput[]): CodeSequence;
+}
 
-  toString() {
-    return this.parts.join("");
+type CodeSegment = Node | string;
+
+export function isCodeSequence(v: unknown): v is CodeSequence {
+  return isObjectWith(v, CODE_SEQUENCE_SYMBOL);
+}
+
+export function codeSequence(input: CodeSequenceInput): CodeSequence {
+  if (isCodeSequence(input)) return input;
+
+  return new CodeSequenceNode(
+    [input]
+      .flat(2)
+      .flatMap(
+        (p): CodeSegment | CodeSegment[] => {
+          if (isCodeSequence(p)) return p.segments;
+          return p;
+        },
+      ),
+  );
+}
+
+export type CodeSequenceInput = SingularInput | ArrayInput;
+type SingularInput = Node | string;
+type ArrayInput = SingularInput[];
+
+export function isCodeSequenceInput(input: unknown): input is CodeSequenceInput {
+  return isCodeSequence(input) || typeof input === "string";
+}
+
+export class CodeSequenceNode implements CodeSequence {
+  readonly [CODE_SEQUENCE_SYMBOL] = true as const;
+  readonly #kind = "codeSequence" as const;
+  readonly #family = "code" as const;
+  readonly #segments: CodeSegment[];
+
+  constructor(segments: CodeSegment[]) {
+    this.#segments = segments;
   }
 
-  transform(t: Transformer): CodeSequence {
+  get kind() { return this.#kind; }
+  get family() { return this.#family; }
+  get segments() { return this.#segments; }
+
+  toString() {
+    return this.#segments.join("");
+  }
+
+  transform(t: Transformer) {
     return t.replace(
       this,
       () =>
         new CodeSequenceNode(
-          this.parts.map((p) => (typeof p === "string" ? p : p.transform(t))),
+          this.segments.map((p) => (typeof p === "string" ? p : p.transform(t))),
         ),
     );
   }
@@ -27,46 +74,6 @@ export class CodeSequenceNode
   with(...input: CodeSequenceInput[]) {
     const flatInput = input.flat();
     if (flatInput.every((i) => i === "")) return this;
-    return CodeSequenceNode.marshal([...this.parts, ...flatInput]);
-  }
-
-  static marshal(input: CodeSequenceInput): CodeSequence {
-    if (CodeSequenceNode.is(input)) return input;
-
-    return new CodeSequenceNode(
-      [input]
-        .flat(2)
-        .flatMap(
-          (
-            p,
-          ):
-            | string
-            | Node<string, Node.Family>
-            | (string | Node<string, Node.Family>)[] => {
-            if (CodeSequenceNode.is(p)) return p.parts;
-            return p;
-          },
-        ),
-    );
-  }
-
-  static is(input: UnknownNodeInput): input is CodeSequence {
-    return input instanceof CodeSequenceNode;
-  }
-
-  static isInput(input: UnknownNodeInput): input is CodeSequenceInput {
-    return CodeSequenceNode.is(input) || typeof input === "string";
+    return codeSequence([...this.segments, ...flatInput]);
   }
 }
-
-type SingularCodeSequenceInput = Node<string, Node.Family> | string;
-
-type ArrayCodeSequenceInput = SingularCodeSequenceInput[];
-
-export type CodeSequenceInput =
-  | SingularCodeSequenceInput
-  | ArrayCodeSequenceInput;
-export type CodeSequence = CodeSequenceNode;
-export const CodeSequence = provider(CodeSequenceNode);
-export const { codeSequence, isCodeSequence, isCodeSequenceInput } =
-  CodeSequence;

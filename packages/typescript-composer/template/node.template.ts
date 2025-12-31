@@ -29,7 +29,7 @@ export function generate(
   const inputType = type(wrappedType);
 
   return code`
-    import { Node, type UnknownNodeInput } from "../plumbing.js";
+    import { Node } from "../plumbing.js";
 
     class ${upperNodeName}Node implements ${nodeType} {
       static readonly kind = ${literal(lowerNodeName)} as const;
@@ -52,11 +52,11 @@ export function generate(
         );
       }
 
-      static is(input: UnknownNodeInput): input is ${upperNodeName} {
+      static is(input: unknown): input is ${upperNodeName} {
         return input instanceof ${upperNodeName}Node;
       }
 
-      static isInput(input: UnknownNodeInput): input is ${upperNodeName}Input {
+      static isInput(input: unknown): input is ${upperNodeName}Input {
         return false;
       }
     }

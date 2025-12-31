@@ -1,28 +1,31 @@
+import { isNode, Node } from "../node.js";
 import {
-  Node,
-  type UnknownNodeInput,
-  hasNodeInputProperty,
-  isNode,
-} from "../plumbing.js";
+  isObjectWith,
+} from "../util.js";
 import { type Access, access } from "./access.js";
 import { type Binary, binary } from "./binary.js";
 import { type Call, call } from "./call.js";
+import { Ident } from "./ident.js";
+import { Inline } from "./inline.js";
 import {
   type Literal,
   type RawLiteralInput,
   isLiteralInput,
   literal,
 } from "./literal/literal.js";
-import { isRefInput, ref } from "./ref.js";
+import { Parens } from "./parens.js";
+import { isRefInput, Ref, ref } from "./ref.js";
+import { VarDeclList } from "./var-decl-list.js";
+import { VarDecl } from "./var-decl.js";
 
-export type Expr<E extends UnknownExpr = UnknownExpr> = E;
+export type Expr = Access | Binary | Call | Ident | Inline | Literal | Parens | Ref | VarDeclList | VarDecl;
 
 function capitalize<S extends string>(s: S): Capitalize<S> {
   return (s.slice(0, 1).toUpperCase() + s.slice(1)) as Capitalize<S>;
 }
 
 const isExprProxyKey = Symbol("isExprProxyKey");
-function isExprProxy<N extends Node<string>>(node: N): node is ExprNode<N> {
+function isExprProxy<N extends Node>(node: N): node is ExprNode<N> {
   return (
     (node as unknown as { [isExprProxyKey]: true | undefined })[
       isExprProxyKey
@@ -30,7 +33,7 @@ function isExprProxy<N extends Node<string>>(node: N): node is ExprNode<N> {
   );
 }
 
-const binaryExprMap = {
+const BINARY_EXPR_MAP = {
   isEqualTo: "==",
   isStrictlyEqualTo: "===",
   isNotEqualTo: "!=",
@@ -46,7 +49,7 @@ const binaryExprMap = {
   assign: "=",
 } as const;
 
-export function exprProxy<N extends Node<string>>(base: N) {
+export function exprProxy<N extends Expr>(base: N) {
   if (isExprProxy(base)) return base;
   return new Proxy(base, {
     get(target: N, name, receiver: N & ExprNode<N>) {
@@ -61,11 +64,11 @@ export function exprProxy<N extends Node<string>>(base: N) {
           if (name === "_" || name === "call") return exprCallingProxy(r);
           return exprCallingProxy(access(r, name.slice(1)));
         }
-        if (Object.hasOwn(binaryExprMap, name)) {
+        if (name in BINARY_EXPR_MAP) {
           const r = isRefInput(receiver) ? ref(receiver) : receiver;
           return exprBinaryProxy(
             r,
-            binaryExprMap[name as keyof typeof binaryExprMap],
+            BINARY_EXPR_MAP[name],
           );
         }
       }
@@ -93,33 +96,30 @@ function exprAccessProxy(base: Expr): Accessor {
 
 function exprBinaryProxy(
   base: Expr,
-  operator: (typeof binaryExprMap)[keyof typeof binaryExprMap],
+  operator: (typeof BINARY_EXPR_MAP)[keyof typeof BINARY_EXPR_MAP],
 ): Binator {
   return (left: ExprInput) => binary(base, operator, left);
 }
 
-export type ExprNode<N extends Node<string>> = N &
+export type ExprNode<N> = N &
   UnknownExpr & {
-    // This looks a little silly, but it avoids a circular dependency,
-    // while preserving the correct type if N is AccessNode.
-    [Key in `$${string}`]: N extends ExprNode<Node<"access">> ? N : Access;
+    [Key in `$${string}`]: Access;
   } & {
-    // As above...
-    $: (index: ExprInput) => N extends ExprNode<Node<"access">> ? N : Access;
-    get: (index: ExprInput) => N extends ExprNode<Node<"access">> ? N : Access;
-    call: (...args: ExprInput[]) => N extends ExprNode<Node<"call">> ? N : Call;
+    $: (index: ExprInput) => Access;
+    get: (index: ExprInput) => Access;
+    call: (...args: ExprInput[]) => Call;
   } & {
     [Key in `_${string}`]: (
       ...args: ExprInput[]
-    ) => N extends ExprNode<Node<"call">> ? N : Call;
+    ) => Call;
   } & {
-    [Key in keyof typeof binaryExprMap]: (
+    [Key in keyof typeof BINARY_EXPR_MAP]: (
       right: ExprInput,
-    ) => N extends ExprNode<Node<"binary">> ? N : Binary;
+    ) => Binary;
   };
 
 export function exprProvider<
-  P extends ExprNodeImplementation<Node<string>, UnknownNodeInput>,
+  P extends ExprNodeImplementation<Node, unknown>,
 >(nodeClass: P) {
   return {
     [nodeClass.kind]: nodeClass.marshal,
@@ -129,7 +129,7 @@ export function exprProvider<
 }
 
 export type ExprProvider<
-  P extends ExprNodeImplementation<Node<string>, UnknownNodeInput>,
+  P extends ExprNodeImplementation<Node, unknown>,
 > = {
   [A in P["kind"]]: P["marshal"];
 } & {
@@ -139,20 +139,20 @@ export type ExprProvider<
 };
 
 export type ExprNodeImplementation<
-  N extends Node<string>,
-  I extends UnknownNodeInput,
+  N extends Node,
+  I extends unknown,
 > = {
   readonly kind: N["kind"];
-  marshal(...input: I extends [...UnknownNodeInput[]] ? I : [I]): ExprNode<N>;
-  is(input: UnknownNodeInput): input is ExprNode<N>;
-  isInput(input: UnknownNodeInput): input is I;
+  marshal(...input: I extends [...unknown[]] ? I : [I]): ExprNode<N>;
+  is(input: unknown): input is ExprNode<N>;
+  isInput(input: unknown): input is I;
 };
 
-type ExprNodeBase = Node<string, Node.Family.EXPR>;
-type UnknownExpr = ExprNodeBase & {
+type GenericExpr = { family: "expr" };
+type UnknownExpr = GenericExpr & {
   [K in `$${string}`]: UnknownExpr;
 };
-export type ExprInput = UnknownExpr | RawLiteralInput;
+export type ExprInput = Expr | RawLiteralInput;
 
 export function expr<E extends UnknownExpr>(input: E): E;
 export function expr(input: RawLiteralInput): Literal;
@@ -163,24 +163,24 @@ export function expr(input: ExprInput): Expr {
   return literal(input);
 }
 
-function isExprNodeBase(input: UnknownNodeInput): input is ExprNodeBase {
-  return isNode(input) && input.family === Node.Family.EXPR;
+function isGenericExpr(input: unknown): input is GenericExpr {
+  return isNode(input) && input.family === "expr";
 }
 
 export function isExpr<E extends UnknownExpr>(input: E): input is E;
-export function isExpr(input: UnknownNodeInput): input is Expr;
-export function isExpr(input: UnknownNodeInput): input is Expr {
-  return isExprNodeBase(input) && hasNodeInputProperty(input, isExprProxyKey);
+export function isExpr(input: unknown): input is Expr;
+export function isExpr(input: unknown): input is Expr {
+  return isGenericExpr(input) && isObjectWith(input, isExprProxyKey);
 }
 
-export function isExprInput(input: UnknownNodeInput): input is ExprInput {
+export function isExprInput(input: unknown): input is ExprInput {
   return isRefInput(input) || isExpr(input) || isLiteralInput(input);
 }
 
 export * from "./access.js";
 export * from "./binary.js";
 export * from "./call.js";
-export * from "./id.js";
+export * from "./ident.js";
 export * from "./inline.js";
 export * from "./literal/literal.js";
 export * from "./parens.js";

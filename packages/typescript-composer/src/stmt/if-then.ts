@@ -1,7 +1,7 @@
 import { type Expr, type ExprInput, expr, isExprInput } from "../expr/expr.js";
 import {
   Node,
-  type UnknownNodeInput,
+  
   hasNodeInputProperty,
   provider,
 } from "../plumbing.js";
@@ -46,11 +46,11 @@ export class IfThenNode implements Node<"ifThen", Node.Family.STMT> {
     );
   }
 
-  static is(input: UnknownNodeInput): input is IfThen {
+  static is(input: unknown): input is IfThen {
     return input instanceof IfThenNode;
   }
 
-  static isInput(input: UnknownNodeInput): input is IfThenInput {
+  static isInput(input: unknown): input is IfThenInput {
     return (
       hasNodeInputProperty(input, "if") &&
       isExprInput(input.if) &&

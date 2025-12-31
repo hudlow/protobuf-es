@@ -1,79 +1,96 @@
 import { type Code, isCode } from "../code/code.js";
-import { isExpr } from "../expr/expr.js";
 import { isInline } from "../expr/inline.js";
+import { Node } from "../node.js";
+import { Transformer } from "../transformer.js";
 import {
-  Node,
-  type Transformer,
-  type UnknownNodeInput,
-  hasNodeInputProperty,
   indent,
-  provider,
-} from "../plumbing.js";
+  isObjectWith,
+} from "../util.js";
 import { exprStmt } from "./expr-stmt.js";
 import { type Stmt, type StmtInput, isStmtInput, stmt } from "./stmt.js";
 
-class BlockNode implements Node<"block", Node.Family.STMT> {
-  static readonly kind = "block";
-  readonly kind = "block";
-  readonly family = Node.Family.STMT;
+const VAR_BLOCK_SYMBOL = Symbol("@bufbuild/typescript-composer/stmt/block");
 
-  private constructor(readonly parts: (Stmt | Code)[]) {}
+export interface Block {
+  [VAR_BLOCK_SYMBOL]: true;
+  readonly kind: "block";
+  readonly family: "stmt";
+  readonly block: (Stmt | Code)[];
+  toString(): string;
+  transform(t: Transformer): Node;
+}
+
+export function isBlock(v: unknown): v is Block {
+  return isObjectWith(v, VAR_BLOCK_SYMBOL);
+}
+
+export function block(block: Block): Block;
+export function block(block: BlockObject): Block;
+export function block(block: () => BlockInput): Block;
+export function block(input: StmtInput[]): Block;
+export function block(...input: StmtInput[]): Block;
+export function block(
+  input?: StmtInput,
+  ...additionalInput: StmtInput[]
+): Block {
+  if (additionalInput.length === 0) {
+    if (input === undefined) return new BlockNode([]);
+    if (isBlock(input)) return input;
+    if (isBlockObject(input)) return block(...input.block);
+    if (Array.isArray(input)) return block(...input);
+    if (typeof input === "function") {
+      const result = input();
+      return block(...(Array.isArray(result) ? result : [result]));
+    }
+  }
+
+  return new BlockNode(
+    [input, ...additionalInput].map((s) => (isCode(s) ? s : stmt(s))),
+  );
+}
+
+export type BlockObject = { block: StmtInput[] };
+export type BlockInput = Block | BlockObject | StmtInput[];
+
+export function isBlockInput(v: unknown): v is BlockInput {
+  return (
+    isBlock(v) ||
+    isBlockObject(v) ||
+    (Array.isArray(v) && v.every((s) => isStmtInput(s)))
+  );
+}
+
+function isBlockObject(input: unknown): input is BlockObject {
+  return (
+    isObjectWith(input, "block") &&
+    Array.isArray(input.block) &&
+    input.block.every((s) => isStmtInput(s))
+  );
+}
+
+class BlockNode implements Block {
+  readonly [VAR_BLOCK_SYMBOL] = true as const;
+  static readonly kind = "block";
+  readonly #kind = "block" as const;
+  readonly #family = "stmt" as const;
+  readonly #block: (Stmt | Code)[];
+
+  constructor(block: (Stmt | Code)[]) {
+    this.#block = block;
+  }
+
+  get kind() { return this.#kind; }
+  get family() { return this.#family; }
+  get block() { return this.#block; }
 
   toString() {
-    return `{\n${indent(this.parts.join("\n"))}\n}`;
+    return `{\n${indent(this.block.join("\n"))}\n}`;
   }
 
   transform(t: Transformer): Block {
     return t.replace(
       this,
-      () => new BlockNode(this.parts.map((p) => p.transform(t))),
-    );
-  }
-
-  static marshal(...input: StmtInput[]): Block;
-  static marshal(block: BlockObject): Block;
-  static marshal(block: Block): Block;
-  static marshal(func: () => BlockInput): Block;
-  static marshal(...input: Code[]): Block;
-  static marshal(
-    input?: AtomicBlockInput,
-    ...additionalInput: AdditionalBlockInput[]
-  ): Block;
-  static marshal(
-    input?: AtomicBlockInput,
-    ...additionalInput: AdditionalBlockInput[]
-  ): Block {
-    if (input === undefined) return new BlockNode([]);
-    if (BlockNode.is(input)) return input;
-    if (BlockNode.isBlockObject(input))
-      return BlockNode.marshal(...input.block);
-    if (typeof input === "function" && !isExpr(input)) {
-      const result = input();
-      return BlockNode.marshal(...(Array.isArray(result) ? result : [result]));
-    }
-
-    return new BlockNode(
-      [input, ...additionalInput].map((s) => (isCode(s) ? s : stmt(s))),
-    );
-  }
-
-  static is(input: UnknownNodeInput): input is Block {
-    return input instanceof BlockNode;
-  }
-
-  static isInput(input: UnknownNodeInput[]): input is BlockInputParams {
-    return (
-      (input.length === 1 &&
-        (BlockNode.is(input[0]) || BlockNode.isBlockObject(input[0]))) ||
-      input.every((s) => isStmtInput(s))
-    );
-  }
-
-  static isBlockObject(input: UnknownNodeInput): input is BlockObject {
-    return (
-      hasNodeInputProperty(input, "block") &&
-      Array.isArray(input.block) &&
-      input.block.every((s) => isStmtInput(s))
+      () => new BlockNode(this.block.map((p) => p.transform(t))),
     );
   }
 }
@@ -84,22 +101,3 @@ export function blockish(node: BlockInput) {
   if (isInline(node)) return exprStmt(node);
   return block(...(Array.isArray(node) ? node : [node]));
 }
-
-export type BlockObject = { block: StmtInput[] };
-export type AtomicBlockInput =
-  | Block
-  | BlockObject
-  | AdditionalBlockInput
-  | (() => BlockInput);
-export type AdditionalBlockInput = StmtInput | Code;
-export type BlockInputParams = [AtomicBlockInput] | AdditionalBlockInput[];
-export type BlockInput =
-  | AtomicBlockInput
-  | [AtomicBlockInput]
-  | AdditionalBlockInput[];
-export type Block = BlockNode;
-export const Block = provider(BlockNode);
-export const { block, isBlock, isBlockInput, isBlockObject } = {
-  ...Block,
-  isBlockObject: BlockNode.isBlockObject,
-};

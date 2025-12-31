@@ -1,46 +1,59 @@
-import { Node, type UnknownNodeInput } from "../../plumbing.js";
-import type { Transformer } from "../../plumbing.js";
-import { type ExprNode, exprProvider, exprProxy } from "../expr.js";
+import {
+  type Expr,
+  exprProxy,
+} from "../../expr/expr.js";
+import { Transformer } from "../../transformer.js";
+import { isObjectWith } from "../../util.js";
 
-export class BooleanLiteralNode implements Node<"booleanLiteral"> {
-  static readonly kind = "booleanLiteral";
-  static readonly #registry: BooleanLiteral[] = [];
-  readonly kind = "booleanLiteral";
-  readonly family = Node.Family.EXPR;
+const BOOLEAN_LITERAL_SYMBOL = Symbol("@bufbuild/typescript-composer/expr/literal/boolean");
 
-  private constructor(readonly value: boolean) {}
+export interface BooleanLiteral {
+  [BOOLEAN_LITERAL_SYMBOL]: true;
+  readonly kind: "booleanLiteral";
+  readonly family: "expr";
+  readonly value: boolean;
+  toString(): string;
+  transform(t: Transformer): Expr;
+}
+
+export function isBooleanLiteral(v: unknown): v is BooleanLiteral {
+  return isObjectWith(v, BOOLEAN_LITERAL_SYMBOL);
+}
+
+export function boolean(input: BooleanLiteralInput): BooleanLiteral {
+  if (isBooleanLiteral(input)) return input;
+
+  return input ? BOOLEAN_TRUE : BOOLEAN_FALSE;
+}
+
+export type BooleanLiteralInput = BooleanLiteral | boolean;
+
+export function isBooleanLiteralInput(input: unknown): input is BooleanLiteralInput {
+  return isBooleanLiteral(input) || typeof input === "boolean";
+}
+
+class BooleanLiteralNode implements BooleanLiteral {
+  readonly [BOOLEAN_LITERAL_SYMBOL] = true as const
+  readonly #kind = "booleanLiteral" as const;
+  readonly #family = "expr" as const;
+  readonly #value: boolean;
+
+  constructor(value: boolean) {
+    this.#value = value;
+  }
+
+  get kind() { return this.#kind; }
+  get family() { return this.#family; }
+  get value() { return this.#value; }
 
   toString() {
-    return this.value ? "true" : "false";
+    return `${this.value}n`;
   }
 
   transform(_: Transformer): BooleanLiteral {
     return exprProxy(this);
   }
-
-  static marshal(input: BooleanLiteralInput): BooleanLiteral {
-    if (BooleanLiteralNode.is(input)) return input;
-
-    const found = BooleanLiteralNode.#registry.find((v) => v.value === input);
-    if (found) return found;
-
-    const created = exprProxy(new BooleanLiteralNode(input));
-    BooleanLiteralNode.#registry.push(created);
-
-    return created;
-  }
-
-  static is(input: UnknownNodeInput): input is BooleanLiteral {
-    return input instanceof BooleanLiteralNode;
-  }
-
-  static isInput(input: UnknownNodeInput): input is BooleanLiteralInput {
-    return BooleanLiteralNode.is(input) || typeof input === "boolean";
-  }
 }
 
-export type BooleanLiteralInput = BooleanLiteral | boolean;
-export type BooleanLiteral = ExprNode<BooleanLiteralNode>;
-export const BooleanLiteral = exprProvider(BooleanLiteralNode);
-export const { booleanLiteral, isBooleanLiteral, isBooleanLiteralInput } =
-  BooleanLiteral;
+const BOOLEAN_TRUE = new BooleanLiteralNode(true);
+const BOOLEAN_FALSE = new BooleanLiteralNode(false);

@@ -1,53 +1,64 @@
-import { type Id, type IdInput, id, isIdInput } from "../expr/id.js";
-import { Node, type UnknownNodeInput, provider } from "../plumbing.js";
-import { hasNodeInputProperty } from "../plumbing.js";
-import type { Transformer } from "../plumbing.js";
+import { Transformer } from "../transformer.js";
+import { isObjectWith } from "../util.js";
+import { Ident, ident, IdentInput, isIdentInput } from "../expr/ident.js";
 
-export class TypeNode implements Node<"type", Node.Family.TYPE> {
-  static readonly kind = "type";
-  readonly kind = "type";
-  readonly family = Node.Family.TYPE;
+const TYPE_SYMBOL = Symbol("@bufbuild/typescript-composer/type");
 
-  private constructor(readonly id: Id) {}
+export interface Type {
+  [TYPE_SYMBOL]: true;
+  readonly kind: "type";
+  readonly family: "expr";
+  readonly id: Ident;
+  toString(): string;
+  transform(t: Transformer): Type;
+}
+
+export function isType(v: unknown): v is Type {
+  return isObjectWith(v, TYPE_SYMBOL);
+}
+
+export function type(input: TypeInput): Type {
+    if (isType(input)) return input;
+    if (isObjectInput(input)) return type(input.type);
+    if (isIdentInput(input)) return new TypeNode(ident(input));
+    return new TypeNode(input);
+  }
+
+export type TypeInput = TypeNode | ObjectTypeInput | IdentInput;
+type ObjectTypeInput = { type: string | IdentInput; };
+
+export function isTypeInput(input: unknown): input is TypeInput {
+  return (
+    isType(input) ||
+    isObjectInput(input) ||
+    isIdentInput(input) ||
+    typeof input === "string"
+  );
+}
+
+function isObjectInput(input: unknown): input is ObjectTypeInput {
+  return isObjectWith(input, "type") && isIdentInput(input.type);
+}
+
+class TypeNode implements Type {
+  readonly [TYPE_SYMBOL] = true as const
+  readonly #kind = "type" as const;
+  readonly #family = "expr" as const;
+  readonly #id: Ident;
+
+  constructor(id: Ident) {
+    this.#id = id;
+  }
+
+  get kind() { return this.#kind; }
+  get family() { return this.#family; }
+  get id() { return this.#id; }
 
   toString() {
     return this.id.toString();
   }
 
-  static marshal(input: TypeInput): Type {
-    if (TypeNode.is(input)) return input;
-    if (TypeNode.#isObjectInput(input)) return TypeNode.marshal(input.type);
-    if (isIdInput(input)) return new TypeNode(id(input));
-    return new TypeNode(input);
-  }
-
-  static is(input: UnknownNodeInput): input is Type {
-    return input instanceof TypeNode;
-  }
-
   transform(_: Transformer) {
     return this;
   }
-
-  static isInput(input: UnknownNodeInput): input is TypeInput {
-    return (
-      TypeNode.is(input) ||
-      TypeNode.#isObjectInput(input) ||
-      isIdInput(input) ||
-      typeof input === "string"
-    );
-  }
-
-  static #isObjectInput(input: UnknownNodeInput): input is ObjectTypeInput {
-    return hasNodeInputProperty(input, "type") && isIdInput(input.type);
-  }
 }
-
-type ObjectTypeInput = {
-  type: string | IdInput;
-};
-
-export type TypeInput = TypeNode | ObjectTypeInput | IdInput;
-export type Type = TypeNode;
-export const Type = provider(TypeNode);
-export const { type, isType, isTypeInput } = Type;

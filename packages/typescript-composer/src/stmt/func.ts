@@ -1,35 +1,107 @@
-import { type Id, id } from "../expr/id.js";
-import type { IdInput } from "../expr/id.js";
+import { type Ident, ident } from "../expr/ident.js";
+import type { IdentInput } from "../expr/ident.js";
 import { type Ref, ref } from "../expr/ref.js";
+import { Node } from "../node.js";
 import {
-  type NamedNode,
-  Node,
+  isObjectWith,
   type Transformer,
-  type UnknownNodeInput,
-  provider,
 } from "../plumbing.js";
 import { type Type, type } from "../type/type.js";
 import { type Arg, type ArgInput, arg } from "./arg.js";
 import {
-  type AtomicBlockInput,
   type Block,
-  type BlockInput,
   block,
 } from "./block.js";
 
-type BlockOutput = AtomicBlockInput | BlockInput;
+const VAR_FUNC_SYMBOL = Symbol("@bufbuild/typescript-composer/stmt/func");
 
-export class FuncNode implements NamedNode<"func", Node.Family.STMT> {
-  static readonly kind = "func";
-  readonly kind = "func";
-  readonly family = Node.Family.STMT;
+export interface Func {
+  [VAR_FUNC_SYMBOL]: true;
+  readonly kind: "func";
+  readonly family: "stmt";
+  readonly id: Ident;
+  readonly args: Arg[];
+  readonly body: Block;
+  readonly returnType?: Type;
+  toString(): string;
+  transform(t: Transformer): Node;
+}
 
-  private constructor(
-    readonly id: Id,
-    readonly args: Arg[],
-    readonly body: Block,
-    readonly returnType?: Type,
-  ) {}
+export function isFunc(v: unknown): v is Func {
+  return isObjectWith(v, VAR_FUNC_SYMBOL);
+}
+
+export function func<const I extends readonly ArgInput[]>(
+  name: IdentInput,
+  args: I,
+  body: BodyFunc<I> | Block,
+  returnType?: Type,
+): Func;
+export function func<const I extends readonly ArgInput[]>(func: FuncObjectInput<I>): Func;
+export function func<const I extends readonly ArgInput[]>(
+  ...i: FuncInput<I> | [FuncObjectInput<I>]
+): Func {
+  const [name, args, body, returnType] =
+    i.length === 1 ? [i[0].id, i[0].args, i[0].body, i[0].returnType] : i;
+
+  const argInstances = args.map(arg);
+
+  const argRefs = argInstances.map(ref);
+  const bodyResult = typeof body === "function" ? body(...argRefs) : body;
+
+  return new FuncNode(
+    ident(name),
+    argInstances,
+    block(...(Array.isArray(bodyResult) ? bodyResult : [bodyResult])),
+    returnType ? type(returnType) : undefined,
+  );
+}
+
+export type FuncInput<I extends readonly ArgInput[]> = readonly [
+  IdentInput,
+  I,
+  BodyFunc<I> | Block,
+  Type?,
+];
+
+interface FuncObjectInput<I extends readonly ArgInput[]> {
+  id: IdentInput;
+  args: I;
+  body: BodyFunc<I> | Block;
+  returnType?: Type;
+}
+
+type BodyFunc<I extends readonly ArgInput[]> = (
+  ...args: ArgRefTuple<I> & readonly Ref<Arg>[]
+) => Block;
+
+export class FuncNode implements Func {
+  [VAR_FUNC_SYMBOL] = true as const;
+  readonly #kind = "func" as const;
+  readonly #family = "stmt" as const;
+  readonly #id: Ident;
+  readonly #args: Arg[];
+  readonly #body: Block;
+  readonly #returnType?: Type;
+
+  constructor(
+    id: Ident,
+    args: Arg[],
+    body: Block,
+    returnType?: Type,
+  ) {
+    this.#id = id;
+    this.#args = args;
+    this.#body = body;
+    this.#returnType = returnType;
+  }
+
+  get kind() { return this.#kind; }
+  get family() { return this.#family; }
+  get id() { return this.#id; }
+  get args() { return this.#args; }
+  get body() { return this.#body; }
+  get returnType() { return this.#returnType; }
 
   toString() {
     const returnTypeAnnotation = this.returnType ? `: ${this.returnType}` : "";
@@ -48,42 +120,6 @@ export class FuncNode implements NamedNode<"func", Node.Family.STMT> {
         ),
     );
   }
-
-  static marshal<const I extends ArgInput[]>(
-    name: IdInput,
-    args: I,
-    body: BodyFunc<I> | Block,
-    returnType?: Type,
-  ): Func;
-  static marshal<const I extends ArgInput[]>(func: FuncObjectInput<I>): Func;
-  static marshal<const I extends ArgInput[]>(
-    ...i: FuncInput<I> | [FuncObjectInput<I>]
-  ): Func {
-    const [name, args, body, returnType] =
-      i.length === 1 ? [i[0].id, i[0].args, i[0].body, i[0].returnType] : i;
-
-    const argInstances = args.map((a) =>
-      arg(...(Array.isArray(a) ? a : [a])),
-    ) as Arg[];
-
-    const argRefs = argInstances.map((a) => ref(a)) as ArgRefTuple<I>;
-    const bodyResult = typeof body === "function" ? body(...argRefs) : body;
-
-    return new FuncNode(
-      id(name),
-      argInstances,
-      block(...(Array.isArray(bodyResult) ? bodyResult : [bodyResult])),
-      returnType ? type(returnType) : undefined,
-    );
-  }
-
-  static is(input: UnknownNodeInput): input is Func {
-    return input instanceof FuncNode;
-  }
-
-  static isInput(_: UnknownNodeInput): _ is FuncInput<ArgInput[]> {
-    return false;
-  }
 }
 
 export type ArgRefTuple<I extends readonly ArgInput[]> = I extends readonly [
@@ -93,24 +129,6 @@ export type ArgRefTuple<I extends readonly ArgInput[]> = I extends readonly [
   ? [Ref<Arg>, ...ArgRefTuple<Rest>]
   : [];
 
-export type Func = FuncNode;
-export const Func = provider(FuncNode);
-export const { func, isFunc, isFuncInput } = Func;
-
-export type FuncInput<I extends readonly ArgInput[]> = readonly [
-  IdInput,
-  I,
-  BodyFunc<I> | Block,
-  Type?,
-];
-
-interface FuncObjectInput<I extends readonly ArgInput[]> {
-  id: IdInput;
-  args: I;
-  body: BodyFunc<I> | Block;
-  returnType?: Type;
-}
-
-type BodyFunc<I extends readonly ArgInput[]> = (
-  ...args: ArgRefTuple<I> & readonly Ref<Arg>[]
-) => BlockOutput;
+// export type Func = FuncNode;
+// export const Func = provider(FuncNode);
+// export const { func, isFunc, isFuncInput } = Func;

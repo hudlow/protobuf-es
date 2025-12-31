@@ -1,16 +1,16 @@
-import type { UnknownNode } from "./plumbing.js";
+import { Node } from "./node";
 
 export abstract class Transformer {
-  abstract mutate(original: UnknownNode): UnknownNode;
+  abstract mutate(original: Node): Node;
 
-  readonly #registry: Entry<UnknownNode>[] = [];
-  #register<N extends UnknownNode>(original: N, replacement: N): N {
+  readonly #registry: Entry<Node>[] = [];
+  #register<N extends Node>(original: N, replacement: N): N {
     this.#registry.push({ original, replacement });
     return replacement;
   }
 
-  replace<N extends UnknownNode>(original: N, replacer: () => N): N;
-  replace(original: UnknownNode, replacer: () => UnknownNode): UnknownNode {
+  replace<N extends Node>(original: N, replacer: () => N): N;
+  replace(original: Node, replacer: () => Node): Node {
     const found = this.#registry.find((n) => n.original === original);
     if (found) return found.replacement;
 
@@ -18,7 +18,7 @@ export abstract class Transformer {
   }
 }
 
-type Entry<T extends UnknownNode> = {
+type Entry<T extends Node> = {
   original: T;
   replacement: T;
 };

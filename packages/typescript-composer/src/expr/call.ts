@@ -1,47 +1,64 @@
-import { Node, type UnknownNodeInput } from "../plumbing.js";
-import type { Transformer } from "../plumbing.js";
+import { Node } from "../node.js";
+import { isObjectWith } from "../util.js";
+import type { Transformer } from "../transformer.js";
 import {
   type Expr,
   type ExprInput,
-  type ExprNode,
   expr,
-  exprProvider,
   exprProxy,
   isExprInput,
 } from "./expr.js";
 
-class CallNode implements Node<"call"> {
-  static readonly kind = "call" as const;
-  readonly family = Node.Family.EXPR;
-  readonly kind = "call" as const;
+const CALL_SYMBOL = Symbol("@bufbuild/typescript-composer/expr/call");
 
-  private constructor(
-    readonly target: Expr,
-    readonly args: Expr[],
-  ) {}
+export interface Call {
+  [CALL_SYMBOL]: true;
+  readonly kind: "call";
+  readonly family: "expr";
+  readonly target: Expr;
+  readonly args: Expr[];
+  toString(): string;
+  transform(t: Transformer): Node;
+}
+
+export function isCall(v: unknown): v is Call {
+  return isObjectWith(v, CALL_SYMBOL);
+}
+
+export function call(target: ExprInput, ...args: ExprInput[]): Call {
+  return exprProxy(new CallNode(expr(target), args.map(expr)));
+}
+
+export type CallInput = [ExprInput, ...ExprInput[]];
+export function isCallInput(input: unknown): input is CallInput {
+  return (Array.isArray(input) && input.length > 0 && input.every(isExprInput));
+}
+
+class CallNode implements Call {
+  [CALL_SYMBOL] = true as const;
+  readonly #family = "expr" as const;
+  readonly #kind = "call" as const;
+  readonly #target: Expr;
+  readonly #args: Expr[];
+
+  constructor(
+    target: Expr,
+    args: Expr[],
+  ) {
+    this.#target = target;
+    this.#args = args;
+  }
+
+  get kind() { return this.#kind; }
+  get family() { return this.#family; }
+  get target() { return this.#target; }
+  get args() { return this.#args; }
 
   toString(): string {
-    return `${this.target}(${this.args.join(", ")})`;
+    return `${this.#target}(${this.#args.join(", ")})`;
   }
 
   transform(_: Transformer): Call {
     return exprProxy(this);
   }
-
-  static marshal(target: ExprInput, ...args: ExprInput[]): Call {
-    return exprProxy(new CallNode(expr(target), args.map(expr)));
-  }
-
-  static is(input: UnknownNodeInput): input is Call {
-    return input instanceof CallNode;
-  }
-
-  static isInput(input: UnknownNodeInput[]): input is CallInput {
-    return input.every(isExprInput);
-  }
 }
-
-export type CallInput = [ExprInput, ...ExprInput[]];
-export type Call = ExprNode<CallNode>;
-export const Call = exprProvider(CallNode);
-export const { call, isCall, isCallInput } = Call;

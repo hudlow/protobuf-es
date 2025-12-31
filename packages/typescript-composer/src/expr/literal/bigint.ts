@@ -1,14 +1,57 @@
-import { Node, type UnknownNodeInput } from "../../plumbing.js";
-import type { Transformer } from "../../plumbing.js";
-import { type ExprNode, exprProvider, exprProxy } from "../expr.js";
+import {
+  type Expr,
+  exprProxy,
+} from "../../expr/expr.js";
+import { Transformer } from "../../transformer.js";
+import { isObjectWith } from "../../util.js";
 
-export class BigIntLiteralNode implements Node<"bigIntLiteral"> {
-  static readonly kind = "bigIntLiteral";
-  static readonly #registry: BigIntLiteral[] = [];
-  readonly kind = "bigIntLiteral";
-  readonly family = Node.Family.EXPR;
+const REGISTRY: Map<bigint, BigIntLiteral> = new Map();
+const BIGINT_LITERAL_SYMBOL = Symbol("@bufbuild/typescript-composer/expr/literal/bigint");
 
-  private constructor(readonly value: bigint) {}
+export interface BigIntLiteral {
+  [BIGINT_LITERAL_SYMBOL]: true;
+  readonly kind: "bigintLiteral";
+  readonly family: "expr";
+  readonly value: bigint;
+  toString(): string;
+  transform(t: Transformer): Expr;
+}
+
+export function isBigIntLiteral(v: unknown): v is BigIntLiteral {
+  return isObjectWith(v, BIGINT_LITERAL_SYMBOL);
+}
+
+export function bigint(input: BigIntLiteralInput): BigIntLiteral {
+    if (isBigIntLiteral(input)) return input;
+
+    const found = REGISTRY.get(input);
+    if (found) return found;
+
+    const created = exprProxy(new BigIntLiteralNode(input));
+    REGISTRY.set(input, created);
+
+    return created;
+  }
+
+export type BigIntLiteralInput = BigIntLiteral | bigint;
+
+export function isBigIntLiteralInput(input: unknown): input is BigIntLiteralInput {
+  return isBigIntLiteral(input) || typeof input === "bigint";
+}
+
+class BigIntLiteralNode implements BigIntLiteral {
+  readonly [BIGINT_LITERAL_SYMBOL] = true as const
+  readonly #kind = "bigintLiteral" as const;
+  readonly #family = "expr" as const;
+  readonly #value: bigint;
+
+  constructor(value: bigint) {
+    this.#value = value;
+  }
+
+  get kind() { return this.#kind; }
+  get family() { return this.#family; }
+  get value() { return this.#value; }
 
   toString() {
     return `${this.value}n`;
@@ -17,30 +60,4 @@ export class BigIntLiteralNode implements Node<"bigIntLiteral"> {
   transform(_: Transformer): BigIntLiteral {
     return exprProxy(this);
   }
-
-  static marshal(input: BigIntLiteralInput): BigIntLiteral {
-    if (BigIntLiteralNode.is(input)) return input;
-
-    const found = BigIntLiteralNode.#registry.find((v) => v.value === input);
-    if (found) return found;
-
-    const created = exprProxy(new BigIntLiteralNode(input));
-    BigIntLiteralNode.#registry.push(created);
-
-    return created;
-  }
-
-  static is(input: UnknownNodeInput): input is BigIntLiteral {
-    return input instanceof BigIntLiteralNode;
-  }
-
-  static isInput(input: UnknownNodeInput): input is BigIntLiteralInput {
-    return BigIntLiteralNode.is(input) || typeof input === "bigint";
-  }
 }
-
-export type BigIntLiteralInput = BigIntLiteral | bigint;
-export type BigIntLiteral = ExprNode<BigIntLiteralNode>;
-export const BigIntLiteral = exprProvider(BigIntLiteralNode);
-export const { bigIntLiteral, isBigIntLiteral, isBigIntLiteralInput } =
-  BigIntLiteral;

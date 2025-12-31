@@ -1,21 +1,39 @@
 import { type Expr, isExpr } from "../expr/expr.js";
-import { Node, type UnknownNodeInput, isNode } from "../plumbing.js";
-import { exprStmt } from "./expr-stmt.js";
-import { type ForInInput, forIn, isForInInput } from "./for-in.js";
-import { type ForLoopInput, forLoop, isForLoopInput } from "./for-loop.js";
-import { type ForOfInput, forOf, isForOfInput } from "./for-of.js";
-import { type IfThenInput, ifThen, isIfThenInput } from "./if-then.js";
-import { type RetInput, isRetInput, ret } from "./ret.js";
+import { Block } from "./block.js";
+import { ExprStmt, exprStmt } from "./expr-stmt.js";
+import { type ForInInput, forIn, isForInInput, ForIn, isForIn } from "./for-in.js";
+import { type ForLoopInput, forLoop, isForLoopInput, ForLoop, isForLoop } from "./for-loop.js";
+import { type ForOfInput, forOf, isForOfInput, ForOf, isForOf } from "./for-of.js";
+import { type IfThenInput, ifThen, isIfThenInput, IfThen, isIfThen } from "./if-then.js";
+import { type RetInput, isRetInput, ret, Ret, isRet } from "./ret.js";
 import {
   type VarDeclStmtInput,
   isVarDeclStmtInput,
   varDeclStmt,
+  VarDeclStmt,
+  isVarDeclStmt,
 } from "./var-decl-stmt.js";
 import {
   type WhileLoopInput,
   isWhileLoopInput,
   whileLoop,
+  WhileLoop,
+  isWhileLoop,
 } from "./while-loop.js";
+
+export type Stmt = Block | ExprStmt | ForIn | ForLoop | ForOf | IfThen | Ret | VarDeclStmt | WhileLoop;
+
+export function isStmt(input: unknown): input is Stmt {
+  return (
+    isForIn(input) ||
+    isForLoop(input) ||
+    isForOf(input) ||
+    isIfThen(input) ||
+    isRet(input) ||
+    isVarDeclStmt(input) ||
+    isWhileLoop(input)
+  );
+}
 
 export function stmt(input: StmtInput): Stmt {
   if (isStmt(input)) return input;
@@ -30,11 +48,18 @@ export function stmt(input: StmtInput): Stmt {
   throw new Error("Invalid statement input.");
 }
 
-export function isStmt(input: UnknownNodeInput): input is Stmt {
-  return isNode(input) && input.family === Node.Family.STMT;
-}
+export type StmtInput =
+  | Stmt
+  | Expr
+  | ForInInput
+  | ForLoopInput
+  | ForOfInput
+  | IfThenInput
+  | RetInput
+  | VarDeclStmtInput
+  | WhileLoopInput;
 
-export function isStmtInput(input: UnknownNodeInput): input is StmtInput {
+export function isStmtInput(input: unknown): input is StmtInput {
   return (
     isStmt(input) ||
     isExpr(input) ||
@@ -47,20 +72,6 @@ export function isStmtInput(input: UnknownNodeInput): input is StmtInput {
     isWhileLoopInput(input)
   );
 }
-
-export type Stmt = Node<string, Node.Family.STMT>;
-export type StmtInput =
-  | Stmt
-  | Expr
-  | ForInInput
-  | ForLoopInput
-  | ForOfInput
-  | IfThenInput
-  | RetInput
-  | VarDeclStmtInput
-  | WhileLoopInput;
-
-export const Stmt = { stmt, isStmt, isStmtInput };
 
 export * from "./arg.js";
 export * from "./block.js";

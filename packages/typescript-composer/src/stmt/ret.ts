@@ -1,7 +1,7 @@
 import { type Expr, type ExprInput, expr, isExprInput } from "../expr/expr.js";
 import {
   Node,
-  type UnknownNodeInput,
+  
   hasNodeInputProperty,
   provider,
 } from "../plumbing.js";
@@ -30,15 +30,15 @@ class RetNode implements Node<"ret", Node.Family.STMT> {
     return new RetNode(expr(input));
   }
 
-  static is(input: UnknownNodeInput): input is Ret {
+  static is(input: unknown): input is Ret {
     return input instanceof RetNode;
   }
 
-  static isInput(input: UnknownNodeInput): input is RetInput {
+  static isInput(input: unknown): input is RetInput {
     return RetNode.#isObjectInput(input);
   }
 
-  static #isObjectInput(input: UnknownNodeInput): input is RetInput {
+  static #isObjectInput(input: unknown): input is RetInput {
     return hasNodeInputProperty(input, "return") && isExprInput(input.return);
   }
 }
